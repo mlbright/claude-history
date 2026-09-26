@@ -1,0 +1,4 @@
+# The index holds transcript contents; never commit it.
+history.db
+history.db-*
+__pycache__/
