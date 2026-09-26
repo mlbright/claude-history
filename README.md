@@ -10,17 +10,26 @@ archive that outlives Claude Code's cleanup.
 
 Only the Python standard library is needed (Python 3.9+, SQLite with FTS5).
 
+## Install
+
+```sh
+ln -s ~/claude-history/claude_history.py ~/.local/bin/claude-history
+```
+
+The database location follows the real script path, so the symlink still uses
+`~/claude-history/history.db`.
+
 ## Usage
 
 ```sh
-./claude_history.py index                      # index new transcript lines (incremental, fast)
-./claude_history.py search vxlan df bit        # best matches first
-./claude_history.py search -r -p cvuv "config restore"          # newest first, sessions whose directory contains "cvuv"
-./claude_history.py search -k prompt --since 2026-09-01 terraform  # only things you typed
-./claude_history.py search -k tool_result 'NEAR(traceback error, 10)'  # FTS5 syntax works too
-./claude_history.py sessions -n 10             # recent sessions with titles
-./claude_history.py show 184f025f              # read a session (id prefix is enough)
-./claude_history.py show 184f025f --tools      # ...including tool calls and results
+claude-history index                      # index new transcript lines (incremental, fast)
+claude-history search vxlan df bit        # best matches first
+claude-history search -r -p cvuv "config restore"          # newest first, sessions whose directory contains "cvuv"
+claude-history search -k prompt --since 2026-09-01 terraform  # only things you typed
+claude-history search -k tool_result 'NEAR(traceback error, 10)'  # FTS5 syntax works too
+claude-history sessions -n 10             # recent sessions with titles
+claude-history show 184f025f              # read a session (id prefix is enough)
+claude-history show 184f025f --tools      # ...including tool calls and results
 ```
 
 `search`, `show` and `sessions` index anything new before running, so the
@@ -35,6 +44,30 @@ is searched as plain words; `--literal` forces that.
 By default the database is `history.db` next to the script. Override it with
 `--db` or `CLAUDE_HISTORY_DB`. The transcript directory follows
 `CLAUDE_CONFIG_DIR`, or pass `--projects-dir`.
+
+## Keeping the archive complete
+
+Transcripts are only preserved once they've been indexed. A `SessionEnd` hook
+in `~/.claude/settings.json` indexes every session as it closes, so nothing is
+lost even if you don't search for longer than `cleanupPeriodDays`:
+
+```json
+"hooks": {
+  "SessionEnd": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "\"$HOME/claude-history/claude_history.py\" index >/dev/null 2>>\"$HOME/claude-history/hook-errors.log\" || true",
+          "timeout": 60
+        }
+      ]
+    }
+  ]
+}
+```
+
+Failures are appended to `hook-errors.log`; an empty file means every run succeeded.
 
 ## What gets indexed
 

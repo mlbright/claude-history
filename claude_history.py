@@ -73,7 +73,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5 (
 
 def connect(db_path: Path) -> sqlite3.Connection:
     new = not db_path.exists()
-    conn = sqlite3.connect(db_path)
+    # Sessions ending together each run `index` from the SessionEnd hook; wait out the other writer.
+    conn = sqlite3.connect(db_path, timeout=30)
     if new:
         # Transcripts hold file contents and command output; keep the archive private.
         os.chmod(db_path, 0o600)
@@ -436,7 +437,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
     p = sub.add_parser("index", parents=[common], help="index new transcript lines")
     p.add_argument("-v", "--verbose", action="store_true", help="list files that added rows")
-    p.set_defaults(func=cmd_index, no_refresh=True)
+    # Not set_defaults(no_refresh=...): the --no-refresh action object is shared by every subparser.
+    p.set_defaults(func=cmd_index)
 
     p = sub.add_parser("search", parents=[common], help="full-text search",
                        description="Full-text search. QUERY uses SQLite FTS5 syntax (AND, OR, NOT, "
@@ -470,7 +472,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parser.parse_args(argv)
     conn = connect(args.db)
     try:
-        if not args.no_refresh:
+        if not args.no_refresh and args.func is not cmd_index:  # cmd_index does its own refresh
             refresh(conn, args.projects_dir)
         args.func(conn, args)
     finally:

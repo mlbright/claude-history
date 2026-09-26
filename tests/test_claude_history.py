@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -53,7 +55,8 @@ class ClaudeHistoryTest(unittest.TestCase):
         self.sub = self.projects / "-home-u-proj" / SID / "subagents" / "agent-abc123.jsonl"
         write_jsonl(self.main, SESSION)
         write_jsonl(self.sub, SUBAGENT)
-        self.conn = ch.connect(root / "history.db")
+        self.db = root / "history.db"
+        self.conn = ch.connect(self.db)
 
     def tearDown(self):
         self.conn.close()
@@ -118,6 +121,22 @@ class ClaudeHistoryTest(unittest.TestCase):
         write_jsonl(self.main, SESSION[:2] + [rec("u8", "user", "fresh walrus")])
         self.assertEqual(ch.refresh(self.conn, self.projects), 1)
         self.assertEqual(len(ch.search(self.conn, "vxlan interfaces")), 1)
+
+    def run_cli(self, *argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            try:
+                ch.main([*argv, "--db", str(self.db), "--projects-dir", str(self.projects)])
+            except SystemExit:
+                pass
+        return out.getvalue()
+
+    def test_cli_commands_refresh_first_unless_told_not_to(self):
+        self.assertEqual(self.run_cli("search", "--no-refresh", "DF", "bit"), "")
+        self.assertIn("«DF» «bit»", self.run_cli("search", "DF", "bit"))
+        write_jsonl(self.main, SESSION + [rec("u7", "user", "brand new aardvark")])
+        self.assertIn("brand new aardvark", self.run_cli("show", SID[:8]))
+        self.assertIn("added 0 messages", self.run_cli("index"))
 
     def test_rows_survive_transcript_deletion(self):
         ch.refresh(self.conn, self.projects)

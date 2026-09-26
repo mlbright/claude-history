@@ -2,3 +2,4 @@
 history.db
 history.db-*
 __pycache__/
+hook-errors.log
